@@ -1,0 +1,5 @@
+CREATE TABLE identity_type (
+    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '身份类型ID',
+    name VARCHAR(50) NOT NULL UNIQUE COMMENT '身份名称',
+    description VARCHAR(255) COMMENT '身份描述'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户身份类型表';
