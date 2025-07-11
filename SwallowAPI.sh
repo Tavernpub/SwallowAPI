@@ -1,232 +1,91 @@
-#!/bin/bash
-# SwallowAPI 一键部署脚本
-# 适用环境：CentOS 7+/兼容系统
-# 作用：自动部署Go后端到/opt/SwallowAPI
-# 作者：https://github.com/Tavernpub/SwallowAPI
+# SwallowPro 后端部署说明
 
-set -e
+## 项目简介
+SwallowPro 后端基于 Go 语言开发，使用 Gin 框架和 GORM ORM，支持用户注册、登录、内容发布、评论、点赞、私信等功能。数据库采用 MySQL。
 
-# 只允许在/opt目录下运行
-if [ "$(pwd)" != "/opt" ]; then
-  echo "请在/opt目录下运行本脚本！"
-  exit 1
-fi
+---
 
-LOG="/tmp/swallowapi_install.log"
-echo "[SwallowAPI] 部署日志: $LOG"
-exec > >(tee -a "$LOG") 2>&1
+## 依赖环境
+- CentOS 7 及以上（推荐）
+- Go 1.23.x 或 1.24.x（脚本自动安装）
+- MySQL 5.5.62 及以上
+- Supervisor（脚本自动安装）
+- 服务器需能访问公网（拉取代码、下载依赖）
 
-# 1. 检查并安装基础依赖
-function install_base() {
-  echo "[1/9] 检查并安装基础依赖..."
-  yum install -y wget git unzip mysql || { echo "依赖安装失败"; exit 1; }
-}
+---
 
-# 2. 检查并安装Go 1.23.0（如已安装且版本符合则跳过）
-function install_go() {
-  if command -v go >/dev/null 2>&1; then
-    GOVERSION=$(go version | awk '{print $3}')
-    if [[ "$GOVERSION" =~ go1.23.* || "$GOVERSION" =~ go1.24.* ]]; then
-      echo "Go已安装: $GOVERSION，跳过Go安装。"
-      return
-    else
-      echo "检测到Go版本($GOVERSION)，将升级为Go 1.23.0"
-    fi
-  fi
-  echo "[2/9] 安装Go 1.23.0..."
-  cd /tmp
-  wget -O go1.23.0.linux-amd64.tar.gz https://go.dev/dl/go1.23.0.linux-amd64.tar.gz
-  rm -rf /usr/local/go
-  tar -C /usr/local -xzf go1.23.0.linux-amd64.tar.gz
-  echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
-  export PATH=$PATH:/usr/local/go/bin
-  source /etc/profile.d/go.sh
-  go version
-}
+## 一键部署（推荐）
 
-# 3. 拉取后端代码
-function clone_repo() {
-  echo "[3/9] 拉取后端代码..."
-  if [ ! -d /opt ]; then mkdir /opt; fi
-  if [ ! -d /opt/SwallowAPI ]; then
-    mkdir -p /opt/SwallowAPI
-    cd /opt
-    git clone https://github.com/Tavernpub/SwallowAPI.git SwallowAPI-tmp
-    cp -r SwallowAPI-tmp/* SwallowAPI/
-    rm -rf SwallowAPI-tmp
-  else
-    cd /opt/SwallowAPI
-    git pull || echo "已存在/opt/SwallowAPI，跳过git pull"
-  fi
-}
+> **注意：SwallowAPI.sh 脚本必须在 /opt 目录下运行，否则会自动退出！**
 
-# 4. 检查main可执行文件
-function check_main() {
-  echo "[4/9] 检查可执行文件..."
-  cd /opt/SwallowAPI
-  if [ ! -f main ]; then
-    echo "未检测到main可执行文件，尝试编译..."
-    if [ -f main.go ]; then
-      go build -o main main.go || { echo "Go编译失败"; exit 1; }
-    else
-      echo "缺少main.go源码，无法编译。请上传main可执行文件。"; exit 1
-    fi
-  fi
-  chmod +x main
-}
+1. **上传脚本**
+   将 `SwallowAPI.sh` 上传到服务器 `/opt` 目录。
 
-# 5. 生成config.yaml
-function gen_config() {
-  echo "[5/9] 生成配置文件/opt/SwallowAPI/config.yaml..."
-  local config_file="/opt/SwallowAPI/config.yaml"
-  if [ -f "$config_file" ]; then
-    echo "已存在config.yaml，跳过自动生成。"
-    return
-  fi
-  echo "请输入数据库相关信息："
-  read -p "数据库地址[默认localhost]：" dbhost
-  dbhost=${dbhost:-localhost}
-  read -p "数据库端口[默认3306]：" dbport
-  dbport=${dbport:-3306}
-  read -p "数据库名：" dbname
-  while [ -z "$dbname" ]; do
-    echo "数据库名不能为空，请重新输入。"
-    read -p "数据库名：" dbname
-  done
-  read -p "数据库用户名：" dbuser
-  while [ -z "$dbuser" ]; do
-    echo "数据库用户名不能为空，请重新输入。"
-    read -p "数据库用户名：" dbuser
-  done
-  read -s -p "数据库密码：" dbpass
-  echo
-  while [ -z "$dbpass" ]; do
-    echo "数据库密码不能为空，请重新输入。"
-    read -s -p "数据库密码：" dbpass
-    echo
-  done
-  echo "请输入后端服务监听端口（如无特殊需求建议用默认8080）："
-  read -p "后端服务端口[默认8080]：" apiport
-  apiport=${apiport:-8080}
-  cat > "$config_file" <<EOF
+2. **赋予执行权限**
+   ```bash
+   cd /opt
+   chmod +x SwallowAPI.sh
+   ```
+
+3. **运行脚本**
+   ```bash
+   ./SwallowAPI.sh
+   ```
+
+4. **按提示输入**
+   - 数据库地址、端口、库名、用户名、密码
+   - 后端服务端口
+   - 是否自动导入数据库建表SQL（推荐首次部署选择y）
+   - 文件上传服务器地址（如无特殊需求用默认即可）
+
+5. **部署完成后**
+   - 后端服务由 Supervisor 守护，接口地址如 `http://服务器IP:端口/api`
+   - 日志见 `/opt/SwallowAPI/main.out.log`
+   - 如需重启服务：
+     ```bash
+     supervisorctl restart swallowapi
+     ```
+
+---
+
+## 配置文件说明（/opt/SwallowAPI/config.yaml）
+```yaml
 mysql:
-  host: $dbhost
-  dbname: $dbname
-  user: $dbuser
-  password: $dbpass
-  port: $dbport
+  host: localhost
+  dbname: your_db
+  user: your_user
+  password: your_pass
+  port: 3306
 server:
   # 后端服务监听端口
-  port: $apiport
-EOF
-  echo "已生成/opt/SwallowAPI/config.yaml"
-}
+  port: 8080
+```
+- 修改后需重启服务生效。
 
-# 6. 导入数据库建表SQL
-function import_sql() {
-  echo "[6/10] 开始导入数据库建表SQL..."
-  local config_file="/opt/SwallowAPI/config.yaml"
-  if [ ! -f "$config_file" ]; then
-    echo "未找到配置文件，无法导入数据库。"; exit 1
-  fi
-  # 解析配置文件
-  dbhost=$(grep 'host:' $config_file | awk '{print $2}')
-  dbport=$(grep 'port:' $config_file | head -1 | awk '{print $2}')
-  dbname=$(grep 'dbname:' $config_file | awk '{print $2}')
-  dbuser=$(grep 'user:' $config_file | awk '{print $2}')
-  dbpass=$(grep 'password:' $config_file | awk '{print $2}')
-  sql_dir="/opt/SwallowAPI/database"
-  if [ ! -d "$sql_dir" ]; then
-    echo "未找到数据库SQL目录 $sql_dir"; exit 1
-  fi
+---
 
-  # 询问用户文件上传服务器地址
-  upload_url_default="https://file.swallowpro.top/"
-  read -p "请输入文件上传服务器地址（用于图片/文件上传）[默认$upload_url_default]：" upload_url
-  upload_url=${upload_url:-$upload_url_default}
+## 数据库初始化
+- 所有建表SQL位于 `/opt/SwallowAPI/database/`，脚本可自动导入。
+- 如需手动导入：
+  ```bash
+  cd /opt/SwallowAPI/database
+  for f in *.sql; do mysql -h主机 -P端口 -u用户名 -p密码 数据库名 < $f; done
+  ```
+- `23.system_config.sql` 中的文件上传服务器地址可在脚本执行时自定义。
 
-  for sqlfile in $(ls $sql_dir/*.sql | sort -V); do
-    if [[ $(basename $sqlfile) == "23.system_config.sql" ]]; then
-      # 替换 file_upload_url 行
-      tmpfile="${sqlfile}.tmp"
-      sed "s#'file_upload_url', '[^']*'#'file_upload_url', '$upload_url'#g" "$sqlfile" > "$tmpfile"
-      echo "正在导入：$(basename $sqlfile) ..."
-      mysql -h$dbhost -P$dbport -u$dbuser -p$dbpass $dbname < "$tmpfile" && \
-        echo "成功导入：$(basename $sqlfile)" || { echo "导入失败：$(basename $sqlfile)"; exit 1; }
-      rm -f "$tmpfile"
-    else
-      echo "正在导入：$(basename $sqlfile) ..."
-      mysql -h$dbhost -P$dbport -u$dbuser -p$dbpass $dbname < $sqlfile && \
-        echo "成功导入：$(basename $sqlfile)" || { echo "导入失败：$(basename $sqlfile)"; exit 1; }
-    fi
-  done
-  echo "所有表已导入完成。"
-}
+---
 
-# 6. 安装Supervisor
-function install_supervisor() {
-  echo "[6/9] 检查并安装Supervisor..."
-  if ! command -v supervisord >/dev/null 2>&1; then
-    yum install -y epel-release
-    yum install -y supervisor
-    systemctl enable supervisord
-    systemctl start supervisord
-  else
-    systemctl start supervisord
-  fi
-}
+## 常见问题
+- **端口被占用**：修改 `config.yaml` 的端口或释放端口
+- **数据库连接失败**：检查数据库配置、网络、防火墙
+- **依赖缺失**：脚本会自动安装Go和Supervisor
+- **图片上传失败**：检查 `file_upload_url` 配置和服务器网络
 
-# 7. 配置Supervisor守护SwallowAPI
-function config_supervisor() {
-  echo "[7/9] 配置Supervisor守护SwallowAPI..."
-  SUPCONF="/etc/supervisord.d/swallowapi.ini"
-  cat > $SUPCONF <<EOF
-[program:swallowapi]
-command=/opt/SwallowAPI/main
-directory=/opt/SwallowAPI
-autostart=true
-autorestart=true
-stderr_logfile=/opt/SwallowAPI/main.err.log
-stdout_logfile=/opt/SwallowAPI/main.out.log
-user=root
-environment=PATH="/usr/local/go/bin:/usr/bin:/bin"
-EOF
-  supervisorctl reread
-  supervisorctl update
-  supervisorctl restart swallowapi || supervisorctl start swallowapi
-}
+---
 
-# 8. 提示用户配置数据库和config.yaml
-function remind_config() {
-  echo "[8/9] 请根据README.md完成数据库建表（如首次部署）"
-  echo "- 数据库建表SQL位于/opt/SwallowAPI/database/"
-  echo "- 配置文件/opt/SwallowAPI/config.yaml"
-  echo "- 如需修改端口或数据库信息，请编辑config.yaml后重启服务：supervisorctl restart swallowapi"
-}
+## 联系方式
+如有问题请联系开发者或提交 issue。
 
-# 9. 完成
-function finish() {
-  echo "[9/9] 部署完成！"
-  echo "后端服务已由Supervisor守护，接口地址：http://服务器IP:$(grep port: /opt/SwallowAPI/config.yaml | tail -1 | awk '{print $2}')/api"
-  echo "如需查看日志：tail -f /opt/SwallowAPI/main.out.log"
-}
+---
 
-# 主流程
-install_base
-install_go
-clone_repo
-check_main
-gen_config
-
-# 新增：导入数据库前询问用户
-read -p "是否需要自动导入数据库建表SQL？(y/n)：" import_choice
-if [[ "$import_choice" == "y" || "$import_choice" == "Y" ]]; then
-  import_sql
-else
-  echo "已跳过数据库建表SQL导入。"
-fi
-
-install_supervisor
-config_supervisor
-remind_config
-finish 
+**本项目开源地址**：[https://github.com/Tavernpub/SwallowAPI](https://github.com/Tavernpub/SwallowAPI)
