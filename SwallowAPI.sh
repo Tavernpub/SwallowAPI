@@ -27,41 +27,40 @@ yes_or_no() {
   return 0
 }
 
-# 1. 检查并安装基础依赖
+# 1. 检查并安装基础依赖（自动执行，无需确认）
 function install_base() {
-  if yes_or_no "是否安装基础依赖（wget git unzip mysql）？"; then
-    echo "[1/9] 检查并安装基础依赖..."
-    yum install -y wget git unzip mysql || { echo "依赖安装失败"; exit 1; }
-  fi
+  echo "[1/9] 检查并安装基础依赖..."
+  yum install -y wget git unzip mysql || { echo "依赖安装失败"; exit 1; }
 }
 
-# 2. 检查并安装Go 1.23.0（如已安装且版本符合则跳过）
+# 2. 检查并安装Go 1.23.0（自动执行，无需确认）
 function install_go() {
-  if yes_or_no "是否安装/升级Go环境？"; then
-    if command -v go >/dev/null 2>&1; then
-      GOVERSION=$(go version | awk '{print $3}')
-      if [[ "$GOVERSION" =~ go1.23.* || "$GOVERSION" =~ go1.24.* ]]; then
-        echo "Go已安装: $GOVERSION，跳过Go安装。"
-        return
-      else
-        echo "检测到Go版本($GOVERSION)，将升级为Go 1.23.0"
-      fi
+  if command -v go >/dev/null 2>&1; then
+    GOVERSION=$(go version | awk '{print $3}')
+    if [[ "$GOVERSION" =~ go1.23.* || "$GOVERSION" =~ go1.24.* ]]; then
+      echo "Go已安装: $GOVERSION，跳过Go安装。"
+      return
+    else
+      echo "检测到Go版本($GOVERSION)，将升级为Go 1.23.0"
     fi
-    echo "[2/9] 安装Go 1.23.0..."
-    cd /tmp
-    wget -O go1.23.0.linux-amd64.tar.gz https://go.dev/dl/go1.23.0.linux-amd64.tar.gz
-    rm -rf /usr/local/go
-    tar -C /usr/local -xzf go1.23.0.linux-amd64.tar.gz
-    echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
-    export PATH=$PATH:/usr/local/go/bin
-    source /etc/profile.d/go.sh
-    go version
   fi
+  echo "[2/9] 安装Go 1.23.0..."
+  cd /tmp
+  wget -O go1.23.0.linux-amd64.tar.gz https://go.dev/dl/go1.23.0.linux-amd64.tar.gz
+  rm -rf /usr/local/go
+  tar -C /usr/local -xzf go1.23.0.linux-amd64.tar.gz
+  echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
+  export PATH=$PATH:/usr/local/go/bin
+  source /etc/profile.d/go.sh
+  go version
 }
 
 # 3. 拉取后端代码
+yes_or_no_clone_repo() {
+  yes_or_no "是否拉取/更新后端代码？"
+}
 function clone_repo() {
-  if yes_or_no "是否拉取/更新后端代码？"; then
+  if yes_or_no_clone_repo; then
     echo "[3/9] 拉取后端代码..."
     if [ ! -d /opt ]; then mkdir /opt; fi
     if [ ! -d /opt/SwallowAPI ]; then
@@ -103,29 +102,25 @@ function gen_config() {
       echo "已存在config.yaml，跳过自动生成。"
       return
     fi
-    echo "请输入数据库相关信息："
-    read -p "数据库地址[默认localhost]：" dbhost
-    dbhost=${dbhost:-localhost}
-    read -p "数据库端口[默认3306]：" dbport
-    dbport=${dbport:-3306}
-    read -p "数据库名：" dbname
+    echo "请输入数据库相关信息（直接回车使用默认值，可自行修改）："
+    read -e -i "localhost" -p "数据库地址：" dbhost
+    read -e -i "3306" -p "数据库端口：" dbport
+    read -e -i "swallowpro" -p "数据库名：" dbname
     while [ -z "$dbname" ]; do
       echo "数据库名不能为空，请重新输入。"
-      read -p "数据库名：" dbname
+      read -e -i "swallowpro" -p "数据库名：" dbname
     done
-    read -p "数据库用户名：" dbuser
+    read -e -i "root" -p "数据库用户名：" dbuser
     while [ -z "$dbuser" ]; do
       echo "数据库用户名不能为空，请重新输入。"
-      read -p "数据库用户名：" dbuser
+      read -e -i "root" -p "数据库用户名：" dbuser
     done
-    read -p "数据库密码：" dbpass
+    read -e -i "123456" -p "数据库密码：" dbpass
     while [ -z "$dbpass" ]; do
       echo "数据库密码不能为空，请重新输入。"
-      read -p "数据库密码：" dbpass
+      read -e -i "123456" -p "数据库密码：" dbpass
     done
-    echo "请输入后端服务监听端口（如无特殊需求建议用默认8080）："
-    read -p "后端服务端口[默认8080]：" apiport
-    apiport=${apiport:-8080}
+    read -e -i "8080" -p "后端服务端口：" apiport
     cat > "$config_file" <<EOF
 mysql:
   host: $dbhost
