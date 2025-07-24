@@ -1,6 +1,0 @@
-CREATE TABLE wall_subsort (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    wall_id INT NOT NULL COMMENT '主分类ID',
-    name VARCHAR(50) NOT NULL COMMENT '子分类名称',
-    FOREIGN KEY (wall_id) REFERENCES wall_sort(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='墙子分类';
